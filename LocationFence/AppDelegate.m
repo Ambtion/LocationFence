@@ -12,6 +12,7 @@
 
 @interface AppDelegate ()<CLLocationManagerDelegate>
 @property(nonatomic,strong)CLLocation * curlocation;
+@property(nonatomic,assign)UIBackgroundTaskIdentifier indetifer;
 @end
 
 @implementation AppDelegate
@@ -144,37 +145,36 @@
         }
     }else{
         
-        //#ifdef _DEBUG
-        //        NSString *sencondLog = [NSString stringWithFormat:@"This app requires region monitoring features which are unavailable on this device"];
-        //        saveLogToDevice(sencondLog)
-        //#endif
     }
 }
 
 - (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
-    [self postLocalNotificationWithMsg:@"didFailWithError"];
+    [self postLocalNotificationWithMsg:@"定位失败"];
 }
 
 - (void)locationManager:(CLLocationManager *)manager monitoringDidFailForRegion:(CLRegion *)region withError:(NSError *)error
 {
-    [self postLocalNotificationWithMsg:@"monitoringDidFailForRegion"];
+    [self postLocalNotificationWithMsg:@"围栏注册失败"];
     
 }
 
 - (void)locationManager:(CLLocationManager *)manager didExitRegion:(nonnull CLRegion *)region
 {
-    [self postLocalNotificationWithMsg:@"didExitRegion"];
+    [self postLocalNotificationWithMsg:@"离开围栏"];
+    [self qauryInBackGroud];
 }
 
 - (void)locationManager:(CLLocationManager *)manager didEnterRegion:(nonnull CLRegion *)region
 {
-    [self postLocalNotificationWithMsg:@"didEnterRegion"];
+    [self postLocalNotificationWithMsg:@"进入围栏"];
+    [self qauryInBackGroud];
     
 }
 
 - (void)locationManager:(CLLocationManager *)manager didStartMonitoringForRegion:(CLRegion *)region {
-    [self postLocalNotificationWithMsg:@"didStartMonitoringForRegion"];
+    [self postLocalNotificationWithMsg:@"开始监控地理围栏"];
 }
+
 
 - (void)postLocalNotificationWithMsg:(NSString *)msg
 {
@@ -192,6 +192,26 @@
         aUserInfo[@"Msg"] = msg;
         notification.userInfo = aUserInfo;
         [[UIApplication sharedApplication] scheduleLocalNotification:notification];
+    }
+}
+
+- (void)qauryInBackGroud
+{
+    self.indetifer = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+        [[UIApplication sharedApplication] endBackgroundTask:self.indetifer];
+        self.indetifer = UIBackgroundTaskInvalid;
+    }];
+    
+    
+    //执行网络请求
+    NSURLRequest * request = [NSURLRequest requestWithURL:[NSURL URLWithString:@"http://www.baidu.com"] cachePolicy:NSURLErrorBackgroundSessionInUseByAnotherProcess timeoutInterval:20.f];
+    
+    NSData *returnData = [NSURLConnection sendSynchronousRequest:request
+                                               returningResponse:nil error:nil];
+    if (returnData.length) {
+        [self postLocalNotificationWithMsg:@"发起网络,请求成功"];
+    }else{
+        [self postLocalNotificationWithMsg:@"发起网络,请求失败"];
     }
 }
 
