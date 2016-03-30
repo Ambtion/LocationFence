@@ -7,39 +7,192 @@
 //
 
 #import "AppDelegate.h"
+#import "RootViewController.h"
 
-@interface AppDelegate ()
 
+@interface AppDelegate ()<CLLocationManagerDelegate>
+@property(nonatomic,strong)CLLocation * curlocation;
 @end
 
 @implementation AppDelegate
 
-
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    // Override point for customization after application launch.
+    self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+    self.window.rootViewController = [[UINavigationController alloc] initWithRootViewController:[[RootViewController alloc] init]];
+    [self.window makeKeyAndVisible];
+    
+    
+//    [self postLocalNotificationWithMsg:@"启动"];
+    
+    [[UIApplication sharedApplication]registerUserNotificationSettings:[UIUserNotificationSettings settingsForTypes:UIUserNotificationTypeAlert|UIUserNotificationTypeBadge|UIUserNotificationTypeSound  categories:nil]];
+    [[UIApplication sharedApplication] setApplicationIconBadgeNumber:0];
+    
+    
+    [self startLocation];
+    
     return YES;
 }
 
-- (void)applicationWillResignActive:(UIApplication *)application {
-    // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-    // Use this method to pause ongoing tasks, disable timers, and throttle down OpenGL ES frame rates. Games should use this method to pause the game.
+- (void)application:(UIApplication *)application didReceiveLocalNotification:(UILocalNotification *)notification
+{
+    
+    UIAlertController * alerC = [UIAlertController alertControllerWithTitle:[[notification userInfo] objectForKey:@"Msg"]  message:nil preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction * action = [UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+        
+    }];
+    [alerC addAction:action];
+    
+    [self.window.rootViewController presentViewController:alerC animated:YES completion:NULL];
 }
 
-- (void)applicationDidEnterBackground:(UIApplication *)application {
-    // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-    // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+- (void)startLocation
+{
+    if (!_locationManager) {
+        
+        _locationManager = [[CLLocationManager alloc] init];
+        
+        _locationManager.delegate = self;
+        
+        [_locationManager setDesiredAccuracy:kCLLocationAccuracyBest];
+        
+        if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 8) {
+            [self.locationManager requestAlwaysAuthorization]; //
+        }
+        if ([[[UIDevice currentDevice] systemVersion] floatValue] >= 9) {
+            _locationManager.allowsBackgroundLocationUpdates = YES;
+        }
+    }
+
+    [_locationManager startUpdatingLocation];
+    
 }
 
-- (void)applicationWillEnterForeground:(UIApplication *)application {
-    // Called as part of the transition from the background to the inactive state; here you can undo many of the changes made on entering the background.
+
+- (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray<CLLocation *> *)locations
+{
+    if (locations.count) {
+        if (!self.curlocation) {
+            self.curlocation = [locations firstObject];
+            [self addFecnes];
+        }
+    }
 }
 
-- (void)applicationDidBecomeActive:(UIApplication *)application {
-    // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+- (void)locationManager:(CLLocationManager *)manager didChangeAuthorizationStatus:(CLAuthorizationStatus)status {
+    switch (status) {
+        case kCLAuthorizationStatusNotDetermined:
+            if ([_locationManager respondsToSelector:@selector(requestWhenInUseAuthorization)]) {
+                [_locationManager requestWhenInUseAuthorization];
+            }
+            break;
+        default:
+            break;
+    }
 }
 
-- (void)applicationWillTerminate:(UIApplication *)application {
-    // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+
+- (void)addFecnes
+{
+    
+    CLLocationCoordinate2D companyCenter;
+    
+    if (self.curlocation) {
+        companyCenter.latitude = self.curlocation.coordinate.latitude;
+        companyCenter.longitude = self.curlocation.coordinate.longitude;
+    }
+    
+    CLRegion *region = [[CLRegion alloc] initCircularRegionWithCenter:self.curlocation.coordinate radius:30.f identifier:@"fences"];
+    [self startMonitoringForRegion:region];
+}
+
+- (void)startMonitoringForRegion:(CLRegion *)region
+{
+    
+    NSMutableArray *regions = [[NSMutableArray alloc] initWithCapacity:0];
+    for (CLRegion *monitored in [self.locationManager monitoredRegions])
+    {
+        [self.locationManager stopMonitoringForRegion:monitored];
+        [regions addObject:monitored];
+    }
+    [regions addObject:region];
+    
+    if([CLLocationManager regionMonitoringEnabled])
+    {
+        for (CLRegion *region in regions)
+        {
+            [self.locationManager startMonitoringForRegion:region];
+        }
+    }else
+    {
+        
+    }
+}
+
+- (void)startMonitoringForRegions:(NSArray *)regions
+{
+    
+    for (CLRegion *monitored in [self.locationManager monitoredRegions])
+    {
+        [self.locationManager stopMonitoringForRegion:monitored];
+    }
+    
+    if([CLLocationManager regionMonitoringEnabled])
+    {
+        for (CLRegion *region in regions)
+        {
+            [self.locationManager startMonitoringForRegion:region];
+        }
+    }else{
+        
+        //#ifdef _DEBUG
+        //        NSString *sencondLog = [NSString stringWithFormat:@"This app requires region monitoring features which are unavailable on this device"];
+        //        saveLogToDevice(sencondLog)
+        //#endif
+    }
+}
+
+- (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
+    [self postLocalNotificationWithMsg:@"didFailWithError"];
+}
+
+- (void)locationManager:(CLLocationManager *)manager monitoringDidFailForRegion:(CLRegion *)region withError:(NSError *)error
+{
+    [self postLocalNotificationWithMsg:@"monitoringDidFailForRegion"];
+    
+}
+
+- (void)locationManager:(CLLocationManager *)manager didExitRegion:(nonnull CLRegion *)region
+{
+    [self postLocalNotificationWithMsg:@"didExitRegion"];
+}
+
+- (void)locationManager:(CLLocationManager *)manager didEnterRegion:(nonnull CLRegion *)region
+{
+    [self postLocalNotificationWithMsg:@"didEnterRegion"];
+    
+}
+
+- (void)locationManager:(CLLocationManager *)manager didStartMonitoringForRegion:(CLRegion *)region {
+    [self postLocalNotificationWithMsg:@"didStartMonitoringForRegion"];
+}
+
+- (void)postLocalNotificationWithMsg:(NSString *)msg
+{
+    UILocalNotification *notification = [[UILocalNotification alloc] init];
+    if (notification) {
+        
+        notification.timeZone = [NSTimeZone defaultTimeZone]; // 使用本地时区
+        notification.fireDate = [NSDate date];
+        
+        notification.repeatInterval = kCFCalendarUnitDay;
+        notification.alertBody   = msg;
+        notification.soundName = UILocalNotificationDefaultSoundName;
+        //        notification.applicationIconBadgeNumber++;
+        NSMutableDictionary *aUserInfo = [[NSMutableDictionary alloc] init];
+        aUserInfo[@"Msg"] = msg;
+        notification.userInfo = aUserInfo;
+        [[UIApplication sharedApplication] scheduleLocalNotification:notification];
+    }
 }
 
 @end
