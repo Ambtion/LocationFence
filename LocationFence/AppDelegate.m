@@ -213,6 +213,8 @@
     }else{
         [self postLocalNotificationWithMsg:@"发起网络,请求失败"];
     }
+    
+    [[UIApplication sharedApplication] endBackgroundTask:self.indetifer];
 }
 
 @end
